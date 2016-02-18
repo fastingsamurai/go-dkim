@@ -84,8 +84,8 @@ type SigOptions struct {
 }
 
 // NewSigOptions returns new sigoption with some defaults value
-func NewSigOptions() SigOptions {
-	return SigOptions{
+func NewSigOptions() *SigOptions {
+	return &SigOptions{
 		Version:               1,
 		Canonicalization:      "simple/simple",
 		Algo:                  "rsa-sha256",
@@ -98,7 +98,7 @@ func NewSigOptions() SigOptions {
 }
 
 // Sign signs an email
-func Sign(email *[]byte, options SigOptions) error {
+func Sign(email *[]byte, options *SigOptions) error {
 	var privateKey *rsa.PrivateKey
 
 	// PrivateKey
