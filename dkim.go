@@ -81,6 +81,8 @@ type SigOptions struct {
 
 	// CopiedHeaderFileds
 	CopiedHeaderFields []string
+
+	privateKey *rsa.PrivateKey
 }
 
 // NewSigOptions returns new sigoption with some defaults value
@@ -97,10 +99,7 @@ func NewSigOptions() *SigOptions {
 	}
 }
 
-// Sign signs an email
-func Sign(email *[]byte, options *SigOptions) error {
-	var privateKey *rsa.PrivateKey
-
+func (options *SigOptions) Prepare() error {
 	// PrivateKey
 	if len(options.PrivateKey) == 0 {
 		return ErrSignPrivateKeyRequired
@@ -113,7 +112,7 @@ func Sign(email *[]byte, options *SigOptions) error {
 	if err != nil {
 		return ErrCandNotParsePrivateKey
 	}
-	privateKey = key
+	options.privateKey = key
 
 	// Domain required
 	if options.Domain == "" {
@@ -149,7 +148,10 @@ func Sign(email *[]byte, options *SigOptions) error {
 	if !hasFrom {
 		return ErrSignHeaderShouldContainsFrom
 	}
+}
 
+// Sign signs an email
+func (options *SigOptions) Sign(email *[]byte) error {
 	// Normalize
 	headers, body, err := canonicalize(email, options.Canonicalization, options.Headers)
 	if err != nil {
@@ -177,7 +179,7 @@ func Sign(email *[]byte, options *SigOptions) error {
 	headers = bytes.TrimRight(headers, " \r\n")
 
 	// sign
-	sig, err := getSignature(&headers, privateKey, signHash[1])
+	sig, err := getSignature(&headers, options.privateKey, signHash[1])
 
 	// add to DKIM-Header
 	subh := ""
