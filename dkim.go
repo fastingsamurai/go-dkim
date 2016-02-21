@@ -148,6 +148,7 @@ func (options *SigOptions) Prepare() error {
 	if !hasFrom {
 		return ErrSignHeaderShouldContainsFrom
 	}
+	return nil
 }
 
 // Sign signs an email
