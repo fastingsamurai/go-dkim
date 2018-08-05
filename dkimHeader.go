@@ -221,8 +221,8 @@ func newDkimHeaderBySigOptions(options *SigOptions) *dkimHeader {
 // NewFromEmail return a new DkimHeader by parsing an email
 // Note: according to RFC 6376 an email can have multiple DKIM Header
 // in this case we return the last inserted or the last with d== mail from
-func newDkimHeaderFromEmail(email *[]byte) (*dkimHeader, error) {
-	m, err := mail.ReadMessage(bytes.NewReader(*email))
+func newDkimHeaderFromEmail(email []byte) (*dkimHeader, error) {
+	m, err := mail.ReadMessage(bytes.NewReader(email))
 	if err != nil {
 		return nil, err
 	}

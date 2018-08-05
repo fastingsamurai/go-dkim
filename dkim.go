@@ -151,12 +151,21 @@ func (options *SigOptions) Prepare() error {
 	return nil
 }
 
-// Sign signs an email
 func (options *SigOptions) Sign(email *[]byte) error {
+	header, err := options.GetSigHeader(*email)
+	if err != nil {
+		return err
+	}
+
+	*email = append([]byte(header), *email...)
+	return nil
+}
+
+func (options *SigOptions) GetSigHeader(email []byte) (string, error) {
 	// Normalize
 	headers, body, err := canonicalize(email, options.Canonicalization, options.Headers)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	signHash := strings.Split(options.Algo, "-")
@@ -164,7 +173,7 @@ func (options *SigOptions) Sign(email *[]byte) error {
 	// hash body
 	bodyHash, err := getBodyHash(&body, signHash[1], options.BodyLength)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Get dkim header base
@@ -174,13 +183,17 @@ func (options *SigOptions) Sign(email *[]byte) error {
 	canonicalizations := strings.Split(options.Canonicalization, "/")
 	dHeaderCanonicalized, err := canonicalizeHeader(dHeader, canonicalizations[0])
 	if err != nil {
-		return err
+		return "", err
 	}
 	headers = append(headers, []byte(dHeaderCanonicalized)...)
 	headers = bytes.TrimRight(headers, " \r\n")
 
 	// sign
 	sig, err := getSignature(&headers, options.privateKey, signHash[1])
+
+	if err != nil {
+		return "", err
+	}
 
 	// add to DKIM-Header
 	subh := ""
@@ -195,15 +208,15 @@ func (options *SigOptions) Sign(email *[]byte) error {
 		}
 	}
 	dHeader += subh + CRLF
-	*email = append([]byte(dHeader), *email...)
-	return nil
+
+	return dHeader, nil
 }
 
 // Verify verifies an email an return
 // state: SUCCESS or PERMFAIL or TEMPFAIL, TESTINGSUCCESS, TESTINGPERMFAIL
 // TESTINGTEMPFAIL or NOTSIGNED
 // error: if an error occurs during verification
-func Verify(email *[]byte) (verifyOutput, error) {
+func Verify(email []byte) (verifyOutput, error) {
 	// parse email
 	dkimHeader, err := newDkimHeaderFromEmail(email)
 	if err != nil {
@@ -289,7 +302,7 @@ func getVerifyOutput(status verifyOutput, err error, flagTesting bool) (verifyOu
 }
 
 // canonicalize returns canonicalized version of header and body
-func canonicalize(email *[]byte, cano string, h []string) (headers, body []byte, err error) {
+func canonicalize(email []byte, cano string, h []string) (headers, body []byte, err error) {
 	body = []byte{}
 	rxReduceWS := regexp.MustCompile(`[ \t]+`)
 
@@ -536,9 +549,9 @@ func getHeadersList(rawHeader *[]byte) (*list.List, error) {
 }
 
 // getHeadersBody return headers and body
-func getHeadersBody(email *[]byte) ([]byte, []byte, error) {
+func getHeadersBody(email []byte) ([]byte, []byte, error) {
 	// TODO: \n -> \r\n
-	parts := bytes.SplitN(*email, []byte{13, 10, 13, 10}, 2)
+	parts := bytes.SplitN(email, []byte{13, 10, 13, 10}, 2)
 	if len(parts) != 2 {
 		return []byte{}, []byte{}, ErrBadMailFormat
 	}

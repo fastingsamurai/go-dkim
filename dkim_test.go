@@ -219,57 +219,58 @@ func Test_SignConfig(t *testing.T) {
 	email := []byte(emailBase)
 	emailToTest := append([]byte(nil), email...)
 	options := NewSigOptions()
-	err := Sign(&emailToTest, options)
+	err := options.Prepare()
 	assert.NotNil(t, err)
 	// && err No private key
 	assert.EqualError(t, err, ErrSignPrivateKeyRequired.Error())
+
 	options.PrivateKey = []byte(privKey)
-	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Prepare()
 
 	// Domain
 	assert.EqualError(t, err, ErrSignDomainRequired.Error())
 	options.Domain = "toorop.fr"
-	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Prepare()
 
 	// Selector
 	assert.Error(t, err, ErrSignSelectorRequired.Error())
 	options.Selector = "default"
-	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Prepare()
 	assert.NoError(t, err)
 
 	// Canonicalization
 	options.Canonicalization = "simple/relaxed/simple"
+	options.Prepare()
 	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Sign(&emailToTest)
 	assert.EqualError(t, err, ErrSignBadCanonicalization.Error())
 
 	options.Canonicalization = "simple/relax"
+	options.Prepare()
 	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Sign(&emailToTest)
 	assert.EqualError(t, err, ErrSignBadCanonicalization.Error())
 
 	options.Canonicalization = "relaxed"
+	options.Prepare()
 	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Sign(&emailToTest)
 	assert.NoError(t, err)
 
 	options.Canonicalization = "SiMple/relAxed"
+	options.Prepare()
 	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Sign(&emailToTest)
 	assert.NoError(t, err)
 
 	// header
 	options.Headers = []string{"toto"}
-	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Prepare()
 	assert.EqualError(t, err, ErrSignHeaderShouldContainsFrom.Error())
 
 	options.Headers = []string{"To", "From"}
 	emailToTest = append([]byte(nil), email...)
-	err = Sign(&emailToTest, options)
+	err = options.Sign(&emailToTest)
 	assert.NoError(t, err)
 
 }
@@ -281,7 +282,7 @@ func Test_canonicalize(t *testing.T) {
 	options.Headers = []string{"from", "date", "mime-version", "received", "received", "In-Reply-To"}
 	// simple/simple
 	options.Canonicalization = "simple/simple"
-	header, body, err := canonicalize(&emailToTest, options.Canonicalization, options.Headers)
+	header, body, err := canonicalize(emailToTest, options.Canonicalization, options.Headers)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte(headerSimple), header)
 	assert.Equal(t, []byte(bodySimple), body)
@@ -289,7 +290,7 @@ func Test_canonicalize(t *testing.T) {
 	// relaxed/relaxed
 	emailToTest = append([]byte(nil), email...)
 	options.Canonicalization = "relaxed/relaxed"
-	header, body, err = canonicalize(&emailToTest, options.Canonicalization, options.Headers)
+	header, body, err = canonicalize(emailToTest, options.Canonicalization, options.Headers)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte(headerRelaxed), header)
 	assert.Equal(t, []byte(bodyRelaxed), body)
@@ -308,31 +309,32 @@ func Test_Sign(t *testing.T) {
 	options.AddSignatureTimestamp = false
 
 	options.Canonicalization = "relaxed/relaxed"
-	err := Sign(&emailRelaxed, options)
+	options.Prepare()
+	err := options.Sign(&emailRelaxed)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte(signedRelaxedRelaxed), emailRelaxed)
 
 	options.BodyLength = 5
 	emailRelaxed = append([]byte(nil), email...)
-	err = Sign(&emailRelaxed, options)
+	err = options.Sign(&emailRelaxed)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte(signedRelaxedRelaxedLength), emailRelaxed)
 
 	options.BodyLength = 0
 	options.Canonicalization = "simple/simple"
 	emailSimple := append([]byte(nil), email...)
-	err = Sign(&emailSimple, options)
+	err = options.Sign(&emailSimple)
 	assert.Equal(t, []byte(signedSimpleSimple), emailSimple)
 
 	options.Headers = []string{"from", "subject", "date", "message-id"}
 	memail := []byte(missingHeaderMail)
-	err = Sign(&memail, options)
+	err = options.Sign(&memail)
 	assert.NoError(t, err)
 
 	options.BodyLength = 5
 	options.Canonicalization = "simple/simple"
 	emailSimple = append([]byte(nil), email...)
-	err = Sign(&emailSimple, options)
+	err = options.Sign(&emailSimple)
 	assert.Equal(t, []byte(signedSimpleSimpleLength), emailSimple)
 
 }
@@ -340,50 +342,50 @@ func Test_Sign(t *testing.T) {
 func Test_Verify(t *testing.T) {
 	// no DKIM header
 	email := []byte(emailBase)
-	status, err := Verify(&email)
+	status, err := Verify(email)
 	assert.Equal(t, NOTSIGNED, status)
 	assert.Equal(t, ErrDkimHeaderNotFound, err)
 
 	// No From
 	email = []byte(signedNoFrom)
-	status, err = Verify(&email)
+	status, err = Verify(email)
 	assert.Equal(t, ErrVerifyBodyHash, err)
 	assert.Equal(t, TESTINGPERMFAIL, status) // cause we use dkheader of the "with from" email
 
 	// missing mandatory 'a' flag
 	email = []byte(signedMissingFlag)
-	status, err = Verify(&email)
+	status, err = Verify(email)
 	assert.Error(t, err)
 	assert.Equal(t, PERMFAIL, status)
 	assert.Equal(t, ErrDkimHeaderMissingRequiredTag, err)
 
 	// missing bad algo
 	email = []byte(signedBadAlgo)
-	status, err = Verify(&email)
+	status, err = Verify(email)
 	assert.Equal(t, PERMFAIL, status)
 	assert.Equal(t, ErrSignBadAlgo, err)
 
 	// bad a flag
 	email = []byte(signedBadAFlag)
-	status, err = Verify(&email)
+	status, err = Verify(email)
 	assert.Equal(t, PERMFAIL, status)
 	assert.Equal(t, ErrSignBadAlgo, err)
 
 	// relaxed
 	email = []byte(signedRelaxedRelaxedLength)
-	status, err = Verify(&email)
+	status, err = Verify(email)
 	assert.NoError(t, err)
 	assert.Equal(t, SUCCESS, status)
 
 	// simple
 	email = []byte(signedSimpleSimpleLength)
-	status, err = Verify(&email)
+	status, err = Verify(email)
 	assert.NoError(t, err)
 	assert.Equal(t, SUCCESS, status)
 
 	// gmail
 	email = []byte(fromGmail)
-	status, err = Verify(&email)
+	status, err = Verify(email)
 	assert.NoError(t, err)
 	assert.Equal(t, SUCCESS, status)
 
